@@ -248,9 +248,13 @@ CLAIMS TO VERIFY:
 [List specific claims from other Minions]
 
 VERIFICATION METHOD:
-- For data claims: Use WebSearch to get current data
+- For math/calculations: Use Bash to execute Python code (NOT LLM re-calculation)
+- For data/statistics: Use Bash to execute Python code to verify computations
+- For current/live data: Use WebSearch ONLY when real-time info is needed
 - For code claims: Use Bash/Read to test the code
 - For file claims: Use Glob/Read to check files exist
+
+⚠️ CRITICAL: LLM re-calculating ≠ verification. External tool execution required.
 
 OUTPUT:
 VERDICT: [VERIFIED/FAILED]
