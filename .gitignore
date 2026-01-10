@@ -1,0 +1,24 @@
+# Sensitive/transient files
+history.jsonl
+stats-cache.json
+settings.json
+*.log
+
+# Cache directories
+cache/
+debug/
+file-history/
+session-env/
+shell-snapshots/
+statsig/
+telemetry/
+todos/
+projects/
+plans/
+downloads/
+config/
+
+# Plugins (managed separately)
+plugins/
+skills/awesome-claude-skills
+skills/claude-d3js-skill
