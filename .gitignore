@@ -1,24 +1,25 @@
-# Sensitive/transient files
-history.jsonl
-stats-cache.json
-settings.json
-*.log
+# Exclude session/history data
+projects/
+*.jsonl
 
-# Cache directories
-cache/
+# Exclude plugins (can be reinstalled)
+plugins/
+
+# Exclude statsig
+statsig/
+
+# Exclude cache directories
+*cache*/
+
+# Exclude transient directories
 debug/
 file-history/
 session-env/
 shell-snapshots/
-statsig/
 telemetry/
 todos/
-projects/
 plans/
 downloads/
 config/
-
-# Plugins (managed separately)
-plugins/
-skills/awesome-claude-skills
-skills/claude-d3js-skill
+*.log
+stats-cache.json

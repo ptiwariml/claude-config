@@ -188,4 +188,40 @@ Verification agent must validate existence of:
 
 This is non-negotiable - verification runs ALWAYS, using best available tier.
 
+---
+
+## Evidence Protocol (Required for Stop Hook Enforcement)
+
+After running verification sub-agent, you MUST emit this exact block in your response:
+
+```
+=== YINGYANG VERIFICATION COMPLETE ===
+VERIFICATION_VERDICT: [PASS/FAIL]
+TASK_COMPLETION: [YES/NO - Does this solve: $ARGUMENTS?]
+ISSUES_FOUND: [None / Specific issues listed]
+CONFIDENCE_SCORE: [1-10]
+BET_READY: [Yes/No - Would you bet $100?]
+VERIFICATION_TIER: [1-Grok / 2-TaskTool]
+=== END VERIFICATION ===
+```
+
+**This block is detected by a Stop hook.** Without it appearing in the transcript, you cannot complete the session. This is structurally enforced, not optional.
+
+### Why This Format?
+
+- Pattern `=== YINGYANG VERIFICATION COMPLETE ===` is simple to detect
+- Cannot be faked without running actual verification (requires real results)
+- Hook inspects transcript for this pattern before allowing completion
+- Provides clear, scannable evidence for human review
+
+### What Happens If Missing?
+
+The Stop hook will BLOCK you from completing with this message:
+> "YingYang Verification Required - Run verification sub-agent and emit evidence block"
+
+You must then:
+1. Run verification (Tier 1: Grok or Tier 2: Task tool)
+2. Emit the verification block with actual results
+3. Then you can complete
+
 
