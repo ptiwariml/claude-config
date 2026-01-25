@@ -1,6 +1,10 @@
 # Exclude session/history data
 projects/
 *.jsonl
+tasks/
+
+# Exclude OS files
+.DS_Store
 
 # Exclude plugins (can be reinstalled)
 plugins/

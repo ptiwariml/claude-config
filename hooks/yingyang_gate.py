@@ -82,6 +82,114 @@ def extract_message_content(message: dict) -> str:
     return ""
 
 
+def detect_code_modifications(entries: list[dict]) -> bool:
+    """Check if any code files were modified using Write/Edit tools."""
+    code_extensions = {'.py', '.js', '.ts', '.tsx', '.jsx', '.go', '.java', '.rs',
+                       '.cpp', '.c', '.h', '.hpp', '.cs', '.rb', '.php', '.swift',
+                       '.kt', '.scala', '.r', '.m', '.mm'}
+
+    for entry in entries:
+        if entry.get("type") == "assistant":
+            message = entry.get("message", {})
+            content = message.get("content", [])
+
+            # Content might be a list of blocks
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        tool_name = block.get("name", "")
+                        tool_input = block.get("input", {})
+
+                        # Check for Write or Edit tools
+                        if tool_name in ["Write", "Edit"]:
+                            file_path = tool_input.get("file_path", "")
+                            if file_path:
+                                # Check if file has a code extension
+                                for ext in code_extensions:
+                                    if file_path.endswith(ext):
+                                        return True
+
+    return False
+
+
+def detect_simple_qa(entries: list[dict]) -> bool:
+    """Detect if this is a simple Q&A session without code changes."""
+    tool_invocation_count = 0
+    has_write_edit_bash = False
+
+    for entry in entries:
+        if entry.get("type") == "assistant":
+            message = entry.get("message", {})
+            content = message.get("content", [])
+
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        tool_invocation_count += 1
+                        tool_name = block.get("name", "")
+
+                        if tool_name in ["Write", "Edit", "Bash"]:
+                            has_write_edit_bash = True
+
+    # Simple Q&A: few tool invocations or no code-modifying tools
+    if tool_invocation_count < 3 or not has_write_edit_bash:
+        return True
+
+    return False
+
+
+def detect_planning_context(entries: list[dict]) -> bool:
+    """Detect if this is a planning or research context."""
+    planning_indicators = [
+        "PLANNING MINION",
+        "writing-plans",
+        "brainstorm",
+        "creating a plan",
+        "implementation plan",
+        "research",
+        "investigation"
+    ]
+
+    for entry in entries:
+        if entry.get("type") in ["user", "assistant"]:
+            content = extract_message_content(entry)
+            content_lower = content.lower()
+
+            for indicator in planning_indicators:
+                if indicator.lower() in content_lower:
+                    return True
+
+    return False
+
+
+def should_require_verification(entries: list[dict]) -> bool:
+    """
+    Determine if YingYang verification should be required.
+
+    Returns True ONLY when:
+    - Code files were modified (Write/Edit on .py, .js, etc.)
+    - NOT in planning/research context
+    - NOT a simple Q&A session
+    """
+    # Skip verification for planning contexts
+    if detect_planning_context(entries):
+        return False
+
+    # Check if code was modified
+    code_modified = detect_code_modifications(entries)
+
+    # If code was modified, verification is required regardless of other factors
+    if code_modified:
+        return True
+
+    # If no code was modified, skip verification for simple Q&A
+    if detect_simple_qa(entries):
+        return False
+
+    # Default: don't require verification
+    return False
+
+
 def check_verification(entries: list[dict]) -> bool:
     """Check if YingYang verification pattern exists AFTER the last user message."""
     # Find index of last user message
@@ -153,10 +261,15 @@ def main():
             print(json.dumps(response))
             return
 
-        # Check for verification pattern
-        if check_verification(entries):
+        # Check if verification is required for this context
+        if not should_require_verification(entries):
+            # Context doesn't require verification (planning, Q&A, no code changes)
+            response = continue_response()
+        elif check_verification(entries):
+            # Verification required and found
             response = continue_response()
         else:
+            # Verification required but not found
             response = block_response(
                 reason="YingYang verification not found in conversation",
                 system_message=(
