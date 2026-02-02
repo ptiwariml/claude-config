@@ -69,17 +69,17 @@ Please ensure your implementation NIRVANA™ for: $ARGUMENTS using the Response-
 
 **Parallel Execution Rules:**
 - Independent tasks MAY be executed in parallel by different implementation agents
-- Each task MUST complete its own GrokVetting before being marked complete
+- Each task MUST complete its own verification (GeminiVetting or GrokVetting) before being marked complete
 - Task status: `pending` → `in_progress` → `implemented` → `vetted` → `complete`
 - Only tasks with status `complete` (implementation + vetting passed) can be considered done
 
-**Per-Task GrokVetting Invocation:**
+**Per-Task Verification Invocation:**
 
 For each completed task implementation in `tasks/<task-id>/`:
 
-**Tier 1: GrokVetting (Primary)**
+**Tier 1: GeminiVetting (Primary)**
 ```bash
-GROK_PROMPT="Vet this INDIVIDUAL TASK implementation for completion and correctness.
+GEMINI_PROMPT="Vet this INDIVIDUAL TASK implementation for completion and correctness.
 
 TASK_ID: <task-id>
 
@@ -122,10 +122,16 @@ BET_READY: [Would you bet \$100 THIS TASK is complete?]
 
 Be ruthlessly critical about THIS INDIVIDUAL TASK."
 
-python ~/.config/claude/skills/GrokVettingSkill/scripts/grok_vet.py "$GROK_PROMPT"
+python ~/.claude/skills/GeminiVettingSkill/scripts/gemini_vet.py "$GEMINI_PROMPT"
 ```
 
-**Tier 2: Task Tool Fallback (if Grok unavailable)**
+**Tier 2: GrokVetting (Fallback if Gemini unavailable)**
+
+```bash
+python ~/.claude/skills/GrokVettingSkill/scripts/grok_vet.py "$GEMINI_PROMPT"
+```
+
+**Tier 3: Task Tool Fallback (if both Gemini and Grok unavailable)**
 ```
 Use Task tool with subagent_type "general-purpose" and prompt:
 
@@ -154,7 +160,7 @@ CRITICAL_ISSUES: [List]
 
 **Task Completion Criteria:**
 - Implementation complete for this task
-- GrokVetting PASS (Tier 1 or Tier 2)
+- Verification PASS (Tier 1: Gemini, Tier 2: Grok, or Tier 3: Task tool)
 - TASK_REQUIREMENTS_FULFILLED: Yes
 - Confidence ≥ 8/10
 - Update task status to `complete`
@@ -230,7 +236,7 @@ FAILED_TASKS: [List any tasks that failed vetting]
   - Would I bet $100 the complete solution works?
 
 **Overall Solution Verification Agent (Phase 4.2):**
-- **MANDATORY**: Launch specialized verification using tiered approach with GrokVetting as primary, Task tool as fallback
+- **MANDATORY**: Launch specialized verification using tiered approach with GeminiVetting as primary, GrokVetting as secondary, Task tool as last resort
 - This agent verifies the INTEGRATED solution fulfills the ORIGINAL user request
 - **CRITICAL**: Verification agent independently reads:
   - ORIGINAL user request from $ARGUMENTS or initial research
@@ -241,18 +247,18 @@ FAILED_TASKS: [List any tasks that failed vetting]
   - ALL integration points between tasks
   - End-to-end test results showing complete solution works
 
-### Tier 1: GrokVetting Skill (Primary Verification)
+### Tier 1: GeminiVetting Skill (Primary Verification)
 
 **Advantages for NIRVANA™:**
 - Fresh, unbiased perspective (no implementation context bias)
-- Real-time reasoning model catches different edge cases
-- Unfiltered critical analysis
-- Fast reasoning model (grok-4-fast-reasoning-latest)
+- Google Search grounding for real-time fact verification
+- Deterministic output (temperature 0) for consistent verification
+- Fast, cost-effective model (gemini-2.5-flash)
 
 **Invocation:**
 ```bash
-# Construct comprehensive vetting prompt for Grok
-GROK_PROMPT="You are performing Phase 4.2 Overall Solution Integration Verification. Your PRIMARY job is to verify the COMPLETE INTEGRATED SOLUTION fulfills the ORIGINAL user request.
+# Construct comprehensive vetting prompt for Gemini
+GEMINI_PROMPT="You are performing Phase 4.2 Overall Solution Integration Verification. Your PRIMARY job is to verify the COMPLETE INTEGRATED SOLUTION fulfills the ORIGINAL user request.
 
 **CONTEXT**: Phase 4.1 already verified individual tasks were completed and vetted. Your job is DIFFERENT - verify the INTEGRATED solution works end-to-end.
 
@@ -326,8 +332,8 @@ BET_READY: [Would you bet \$100 the COMPLETE SOLUTION fulfills the ORIGINAL requ
 
 Be ruthlessly critical. The PRIMARY question is: Does the complete integrated solution fulfill the original user request?"
 
-# Execute Grok vetting
-python ~/.config/claude/skills/GrokVettingSkill/scripts/grok_vet.py "$GROK_PROMPT"
+# Execute Gemini vetting
+python ~/.claude/skills/GeminiVettingSkill/scripts/gemini_vet.py "$GEMINI_PROMPT"
 ```
 
 **Success Criteria for Phase 4.2 PASS:**
@@ -344,15 +350,31 @@ python ~/.config/claude/skills/GrokVettingSkill/scripts/grok_vet.py "$GROK_PROMP
 **Failure Response:**
 - If VERDICT: FAIL → Return to implementation with specific violations
 - If Confidence < 8 → Address warnings and re-vet
-- If API error → Proceed to Tier 2 fallback
+- If Gemini API error → Proceed to Tier 2 (GrokVetting)
 
-### Tier 2: Task Tool Verification (Fallback)
+### Tier 2: GrokVetting Skill (Fallback Verification)
 
 **When to Use:**
-- GrokVetting unavailable (API issues)
-- Grok API failures (rate limit, network issues, service down)
-- As secondary validation after Grok PASS (optional dual verification)
-- GrokVetting returns ambiguous results
+- GeminiVetting unavailable (API issues)
+- Gemini API failures (rate limit, network issues, service down)
+- XAI_API_KEY is available
+- As secondary validation after Gemini PASS (optional dual verification)
+- GeminiVetting returns ambiguous results
+
+**Invocation:**
+```bash
+python ~/.claude/skills/GrokVettingSkill/scripts/grok_vet.py "$GEMINI_PROMPT"
+```
+
+**Failure Response:**
+- If Grok also fails → Proceed to Tier 3 (Task tool)
+
+### Tier 3: Task Tool Verification (Last Resort)
+
+**When to Use:**
+- Both GeminiVetting and GrokVetting unavailable
+- All API keys missing or rate limited
+- As tertiary validation (optional)
 
 **Invocation:**
 - Launch verification sub-agent using Task tool with subagent_type: "general-purpose"
@@ -519,7 +541,7 @@ When launching the verification sub-agent via Task tool (Tier 2 fallback), use t
 ```
 You are an independent verification agent (Tier 2 fallback). Your PRIMARY job is to verify the implementation ACTUALLY FULFILLS the specific requirements documented in research.md and plan.md.
 
-**NOTE**: You are running as fallback verification since GrokVetting (Tier 1) was unavailable. Apply extra thoroughness.
+**NOTE**: You are running as fallback verification since GeminiVetting (Tier 1) and GrokVetting (Tier 2) were unavailable. Apply extra thoroughness.
 
 TASK_ID: [task-id]
 ARTIFACT_PATHS:

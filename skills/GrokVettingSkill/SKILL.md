@@ -5,19 +5,21 @@ trigger_phrases: ["vet with Grok", "check via Grok", "Grok validate", "cross-che
 permissions: ["api_call", "external_query"]
 ---
 
-# GrokVetting Skill - Independent Verification Gatekeeper
+# GrokVetting Skill - Independent Verification Gatekeeper (Tier 2 Fallback)
 
 ## Purpose
 
-GrokVetting is an **independent verification agent** that provides unbiased, critical analysis of completed work. It acts as a **gatekeeper** in the YingYang verification flow, ensuring implementations actually accomplish what the user requested.
+GrokVetting is an **independent verification agent** that provides unbiased, critical analysis of completed work. It acts as the **Tier 2 fallback gatekeeper** in the YingYang verification flow when GeminiVetting (Tier 1) is unavailable.
+
+**Note:** GeminiVettingSkill is now the primary (Tier 1) verifier. GrokVetting serves as the fallback when the Gemini API is unavailable.
 
 **Philosophy:** Trust but verify. An independent second opinion catches errors that self-assessment misses.
 
 ---
 
-## Role: Independent Gatekeeper
+## Role: Fallback Independent Gatekeeper (Tier 2)
 
-GrokVetting serves as **Tier 1 verification** in the YingYang framework:
+GrokVetting serves as **Tier 2 verification** (fallback) in the YingYang framework:
 
 | Aspect | Description |
 |--------|-------------|
@@ -145,12 +147,13 @@ BET_READY: [Yes/No - Would you bet $100 this works?]
 
 ## Integration with YingYang
 
-GrokVetting is **Tier 1** in the YingYang verification hierarchy:
+GrokVetting is **Tier 2** in the YingYang verification hierarchy:
 
 | Tier | Method | When to Use |
 |------|--------|-------------|
-| **Tier 1** | GrokVetting (this skill) | Primary - when XAI_API_KEY available |
-| **Tier 2** | Task tool subagent | Fallback - when Grok unavailable |
+| **Tier 1** | GeminiVetting | Primary - when GEMINI_API_KEY available |
+| **Tier 2** | GrokVetting (this skill) | Fallback - when Gemini unavailable but XAI_API_KEY available |
+| **Tier 3** | Task tool subagent | Last resort - when both APIs unavailable |
 
 After verification, emit the YingYang evidence block:
 
@@ -161,7 +164,7 @@ TASK_COMPLETION: [YES/NO]
 ISSUES_FOUND: [None / List]
 CONFIDENCE_SCORE: [1-10]
 BET_READY: [Yes/No]
-VERIFICATION_TIER: [1-Grok / 2-TaskTool]
+VERIFICATION_TIER: [1-Gemini / 2-Grok / 3-TaskTool]
 === END VERIFICATION ===
 ```
 
@@ -171,10 +174,10 @@ VERIFICATION_TIER: [1-Grok / 2-TaskTool]
 
 | Error | Resolution |
 |-------|------------|
-| `XAI_API_KEY` not set | Fall back to Tier 2 (Task tool) |
-| API rate limit | Fall back to Tier 2 |
-| Network error | Fall back to Tier 2 |
-| Timeout | Fall back to Tier 2 |
+| `XAI_API_KEY` not set | Fall back to Tier 3 (Task tool) |
+| API rate limit | Fall back to Tier 3 |
+| Network error | Fall back to Tier 3 |
+| Timeout | Fall back to Tier 3 |
 
 ---
 

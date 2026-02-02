@@ -61,19 +61,19 @@ A user describing a bug for the third time isn't thinking "this AI is trying har
 
 ## Verification Tier Strategy
 
-### Tier 1: GrokVetting Skill (Primary Verifier)
+### Tier 1: GeminiVetting Skill (Primary Verifier)
 
 **When to Use:**
 - Implementation involves logic, algorithms, or complex business rules
 - Code security or efficiency concerns exist
-- Want unfiltered, critical analysis
-- XAI_API_KEY is available
+- Want search-grounded, critical analysis
+- GEMINI_API_KEY is available
 
 **Invocation:**
-Execute Grok vetting via the skill's Python script with this prompt structure:
+Execute Gemini vetting via the skill's Python script with this prompt structure:
 
 ```bash
-python ~/.config/claude/skills/GrokVettingSkill/scripts/grok_vet.py "Vet whether this implementation ACTUALLY COMPLETES the user's original task.
+python ~/.claude/skills/GeminiVettingSkill/scripts/gemini_vet.py "Vet whether this implementation ACTUALLY COMPLETES the user's original task.
 
 === PRIMARY VERIFICATION ===
 ORIGINAL USER TASK: $ARGUMENTS
@@ -121,14 +121,64 @@ BET_READY: [Yes/No - would you bet \$100 the USER'S TASK is completed?]"
 **Failure Handling:**
 - If VERDICT: FAIL → Address issues and re-vet
 - If Confidence < 8 → Fix warnings and re-vet
-- If Grok API fails/unavailable → Proceed to Tier 2
+- If Gemini API fails/unavailable → Proceed to Tier 2
 
-### Tier 2: Task Tool Verification (Fallback)
+### Tier 2: GrokVetting Skill (Fallback Verifier)
 
 **When to Use:**
-- GrokVetting unavailable (API issues, rate limit)
-- GrokVetting returns error
-- As secondary validation after Grok approval (optional)
+- GeminiVetting unavailable (API issues, rate limit)
+- GeminiVetting returns error
+- XAI_API_KEY is available
+- As secondary validation after Gemini approval (optional)
+
+**Invocation:**
+Execute Grok vetting via the skill's Python script:
+
+```bash
+python ~/.claude/skills/GrokVettingSkill/scripts/grok_vet.py "Vet whether this implementation ACTUALLY COMPLETES the user's original task.
+
+=== PRIMARY VERIFICATION ===
+ORIGINAL USER TASK: $ARGUMENTS
+
+CRITICAL QUESTION: Does the implementation actually solve THIS SPECIFIC TASK that the user requested?
+
+=== IMPLEMENTATION DETAILS ===
+CONTEXT: [Brief description of what was implemented]
+
+CODE/CHANGES: [Relevant code snippets or file paths with line numbers]
+
+EVIDENCE PROVIDED: [List logs, screenshots, test outputs showing the TASK was completed]
+
+=== SECONDARY VERIFICATION (30-Second Reality Check) ===
+1. Did code actually get run/built?
+2. Was the exact feature triggered?
+3. Were expected results observed?
+4. Were error messages checked?
+5. Any logical flaws or edge cases missed?
+6. Would you bet \$100 this works FOR THE USER'S TASK?
+
+Be critical and evidence-based.
+
+Output format:
+VERDICT: [PASS/FAIL]
+TASK_COMPLETION: [Does this solve the user's original request: $ARGUMENTS?]
+ISSUES: [List critical problems preventing task completion]
+RISKS: [List warnings/concerns]
+CONFIDENCE_SCORE: [1-10]
+BET_READY: [Yes/No]"
+```
+
+**Failure Handling:**
+- If VERDICT: FAIL → Address issues and re-vet
+- If Confidence < 8 → Fix warnings and re-vet
+- If Grok API fails/unavailable → Proceed to Tier 3
+
+### Tier 3: Task Tool Verification (Last Resort)
+
+**When to Use:**
+- Both GeminiVetting and GrokVetting unavailable
+- All API keys missing or rate limited
+- As tertiary validation (optional)
 
 **Invocation:**
 Use Task tool with subagent_type "general-purpose" and prompt:
@@ -166,10 +216,11 @@ EVIDENCE: [What you verified about task completion]
 
 ## Implementation Protocol
 
-1. **Attempt Tier 1 (GrokVetting) first** if available
-2. **If Grok fails/unavailable**, automatically use Tier 2 (Task tool)
-3. **Document which tier was used** in your verification report
-4. **Re-vet after fixes** until verification passes
+1. **Attempt Tier 1 (GeminiVetting) first** if GEMINI_API_KEY available
+2. **If Gemini fails/unavailable**, automatically use Tier 2 (GrokVetting) if XAI_API_KEY available
+3. **If both fail/unavailable**, use Tier 3 (Task tool subagent)
+4. **Document which tier was used** in your verification report
+5. **Re-vet after fixes** until verification passes
 
 ## Evidence Requirements (All Tiers)
 
@@ -201,7 +252,7 @@ TASK_COMPLETION: [YES/NO - Does this solve: $ARGUMENTS?]
 ISSUES_FOUND: [None / Specific issues listed]
 CONFIDENCE_SCORE: [1-10]
 BET_READY: [Yes/No - Would you bet $100?]
-VERIFICATION_TIER: [1-Grok / 2-TaskTool]
+VERIFICATION_TIER: [1-Gemini / 2-Grok / 3-TaskTool]
 === END VERIFICATION ===
 ```
 
