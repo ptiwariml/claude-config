@@ -22,13 +22,13 @@ from pathlib import Path
 VERIFICATION_PATTERN = "=== YINGYANG VERIFICATION COMPLETE ==="
 
 
-def read_stdin() -> dict:
-    """Read and parse JSON from stdin."""
+def read_stdin() -> tuple[dict, str]:
+    """Read and parse JSON from stdin. Returns (parsed_dict, raw_string)."""
     try:
         raw_input = sys.stdin.read()
         if not raw_input.strip():
-            return {}
-        return json.loads(raw_input)
+            return {}, ""
+        return json.loads(raw_input), raw_input
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON input: {e}")
 
@@ -190,16 +190,34 @@ def should_require_verification(entries: list[dict]) -> bool:
     return False
 
 
-def check_verification(entries: list[dict]) -> bool:
-    """Check if YingYang verification pattern exists AFTER the last user message."""
-    # Find index of last user message
+def check_verification(entries: list[dict], raw_stdin: str = "") -> bool:
+    """Check if YingYang verification pattern exists.
+
+    Checks two sources:
+    1. The raw stdin input (which may contain the current response not yet
+       flushed to the transcript file — fixes the stop hook timing issue)
+    2. Assistant messages in the transcript AFTER the last user message
+    """
+    # Check 1: Raw stdin may contain the current response content
+    if raw_stdin and VERIFICATION_PATTERN in raw_stdin:
+        return True
+
+    # Check 2: Search transcript entries after last user message
     last_user_idx = -1
     for i, entry in enumerate(entries):
         if entry.get("type") == "user":
             last_user_idx = i
 
-    # Only check assistant messages AFTER the last user message
     for entry in entries[last_user_idx + 1:]:
+        if entry.get("type") == "assistant":
+            content = extract_message_content(entry)
+            if VERIFICATION_PATTERN in content:
+                return True
+
+    # Check 3: Search ALL assistant entries (not just after last user)
+    # because the hook feedback itself creates new "user" entries that
+    # push the boundary forward, hiding earlier verification blocks
+    for entry in entries:
         if entry.get("type") == "assistant":
             content = extract_message_content(entry)
             if VERIFICATION_PATTERN in content:
@@ -230,7 +248,7 @@ def main():
     """Main entry point for the hook."""
     try:
         # Read input from stdin
-        input_data = read_stdin()
+        input_data, raw_stdin = read_stdin()
 
         # Check for transcript_path
         transcript_path = input_data.get("transcript_path")
@@ -265,7 +283,7 @@ def main():
         if not should_require_verification(entries):
             # Context doesn't require verification (planning, Q&A, no code changes)
             response = continue_response()
-        elif check_verification(entries):
+        elif check_verification(entries, raw_stdin):
             # Verification required and found
             response = continue_response()
         else:
